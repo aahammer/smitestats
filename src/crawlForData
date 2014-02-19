@@ -1,0 +1,95 @@
+import threading
+from src.extract import requestHtml as source
+from src.load import parseSmiteMatch as parse
+from src.transform import writeSmiteMatch as sink
+from lxml import etree
+
+class Coordinator():
+    threadLock = threading.Lock()
+    def __init__(self, startid, maxid):
+        self.curid = startid
+        self.maxid = maxid
+    def nextMatchId(self):
+        if self.curid <= self.maxid:
+            self.curid += 1
+            return self.curid-1
+        return 0
+
+import traceback
+
+class matchGrabber (threading.Thread):
+
+    url = "http://account.hirezstudios.com/smitegame/match-details.aspx?match="
+    def __init__(self, proxy, coordinator):
+
+        """
+
+        :rtype : object
+        :param proxy: Waldfee
+        :param coordinator:
+        """
+        threading.Thread.__init__(self)
+        self.coordinator = coordinator
+        self.proxy =  { "http": "http://"+proxy }
+
+
+    def run(self):
+
+        while True:
+
+            self.coordinator.threadLock.acquire()
+            matchId = self.coordinator.nextMatchId()
+            self.coordinator.threadLock.release()
+            if matchId == 0: return
+            print self.proxy['http'] + ' drew matchId: ' +  str(matchId)
+            tree = source.getHTMLPageAsXML(self.url + str(matchId), self.proxy )
+            print str(matchId) + "loaded"
+            #tree = source.getDummyHTML()
+            matchData = None
+            try:
+                matchData = parse.getMatchData(tree)
+            except Exception, e:
+                print "Error:", str(matchId)
+                print "Error:", e
+                print traceback.format_exc()
+                print etree.tostring(tree, pretty_print=True, method="html")
+                return
+
+            if matchData == None :
+                matchData = {}
+                matchData['match_id'] = matchId
+                sink.writeMatchData(matchData)
+            else:
+                sink.writeMatchData(matchData)
+                playerData = None
+                try:
+                    playerData = parse.getPlayerData(tree)
+                except Exception, e:
+                    print "Error:", str(matchId)
+                    print "Error:", e
+                    print traceback.format_exc()
+                    print etree.tostring(tree, pretty_print=True, method="html")
+                    return
+
+                for player in playerData:
+                    player['match_id'] = matchData['match_id']
+                    sink.writePlayerData(player)
+
+#4629330, 462934161, 46293416
+def main():
+
+    proxyList = ['58.22.28.134:81', '218.108.232.93:80']
+    threads = []
+    minMatchId = 46298603
+    maxMatchId = 46310000
+    coordinator = Coordinator(minMatchId,maxMatchId)
+
+    for i in range(len(proxyList)):
+        threads.append(matchGrabber(proxyList[i], coordinator))
+        threads[i].start()
+
+    for t in threads:
+        t.join()
+
+if  __name__ =='__main__':
+    main()
