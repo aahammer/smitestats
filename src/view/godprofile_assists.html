@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+</head>
+<body>
+    <style>
+
+    body {
+      font: 10px sans-serif;
+    }
+
+    .selected {
+        background-color: darkblue;
+        color: white;
+    }
+
+    td {
+        padding-right: 1em;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+
+    .line {
+      fill: none;
+      stroke: darkblue;
+      stroke-width: 1.5px;
+    }
+
+    .area {
+      fill: #F2F2F2;
+    }
+  .title {
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    .subtitle {
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 2em;
+    }
+
+    </style>
+
+     <div class="title">God Assist Profile - Select a God to see his Performance Curve in Blue</div>
+     <div class="subtitle">The Grey Area shows the Average Assists of All Gods as Benchmark</div>
+
+
+    <table id="gods">
+
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</select>
+    <script src="jquery-1.11.0.min.js"></script>
+
+    <script src="d3.v3.min.js"></script>
+
+        <script>
+
+        var selectedGod = "G245";
+
+        (function() {
+
+            $(document).ready(function() {
+
+
+                d3.tsv("godprofile.tsv", function(error, data) {
+
+                    playerData = data;
+                    for (var i =0; i < 5; i++)
+                    {
+                        var row = $('<tr></tr>');
+
+                        for (var j  =0; j < 10; j++)
+                             {
+
+                                 var cell = $('<td>'+data[((i*10)+j)*5].God+'</td>');
+                                 cell.attr('id', 'G'+((i*10)+j)*5);
+                                 cell.bind({
+                                          click: function() {
+                                            $('#'+selectedGod).removeClass('selected');
+                                            $( this ).addClass('selected');
+                                            selectedGod = $(this).attr('id');
+                                            console.log($( this ).text());
+                                            var godRow = $(this).attr('id').substr(1);
+
+                                           var newData = playerData.filter(function(d){return d.God == playerData[godRow].God});
+
+                                            killPath.data(newData)
+                                                .transition()
+                                                    .duration(2000)
+                                                    .attr("d", line(newData));
+                                          }
+                                        });
+                                 row.append(cell)
+                             }
+
+                        $('#gods').append(row);
+                        $('#'+selectedGod).addClass('selected');
+                    }
+
+                });
+
+              });
+        })();
+
+
+
+            var margin = {top: 20, right: 20, bottom: 30, left: 50},
+            width = 560 - margin.left - margin.right,
+            height = 500 - margin.top - margin.bottom;
+
+            var playerData;
+
+            var x = d3.scale.linear()
+                .range([10, width]);
+
+            var y = d3.scale.linear()
+                .range([height, 0]);
+
+            var xAxis = d3.svg.axis()
+                .scale(x)
+                .orient("bottom");
+
+            var yAxis = d3.svg.axis()
+                .scale(y)
+                .orient("left");
+
+            var area = d3.svg.area()
+                    .interpolate("basis")
+                .x(function(d) { return x(+d.Time+5); })
+                .y0(height)
+                .y1(function(d) { return y(+d.Assists); });
+
+            var line = d3.svg.line()
+                    .interpolate("basis")
+                .x(function(d) { return x(+d.Time+5); })
+                .y(function(d) { return y(+d.Assists); });
+
+
+            var svg = d3.select("body").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+              .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+             var killPath;
+
+            d3.tsv("godprofile.tsv", function(error, data) {
+                console.log(data);
+
+
+                averageData = data.filter(function(d){return d.God == "All Gods"});
+                x.domain(d3.extent(averageData, function(d) { return +d.Time+5; }));
+                y.domain([0,0.42]);
+                /*y.domain([d3.min(data.slice(0,5), function(d) { return +d.Kills; }),
+                          d3.max(data.slice(0,5), function(d) { return +d.Kills; })]);*/
+
+              svg.append("path")
+                  .data([averageData])
+                  .attr("class", "area")
+                  .attr("d", area);
+
+              killPath = svg.append("path")
+                  .data([data.filter(function(d){return d.God == "All Gods"})])
+                  .attr("class", "line")
+                  .attr("d", line);
+
+              svg.append("g")
+                  .attr("class", "x axis")
+                  .attr("transform", "translate(0," + height + ")")
+                  .call(xAxis)
+                .append("text")
+                  .attr("transform", "translate("+(width-5)+", 15)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text("Time played")
+
+              var g = svg.append("g")
+                  .attr("class", "y axis")
+                  .call(yAxis);
+                g.append("text")
+                  .attr("transform", "translate(0,20) rotate(-90)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text("Assists per minute")
+                g.append("text")
+                  .attr("transform", "translate(25,-10)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text("Max");
+                 g.append("text")
+                  .attr("transform", "translate(-8,"+(-10+height)+")")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text("Min");
+                 g.append("text")
+                  .attr("transform", "translate("+width+","+(height/2)+") rotate(-90)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text("Grey Area = Average Assists of All Gods")
+            });
+
+        </script>
+
+</body>
+</html>

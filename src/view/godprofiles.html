@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+</head>
+<body>
+    <style>
+    body {
+      font: 10px sans-serif;
+    }
+
+    .selected {
+        background-color: darkblue;
+        color: white;
+    }
+    .selectedBaseline {
+        background-color: darkred;
+        color: white;
+    }
+
+    td {
+        padding-right: 1em;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+
+    .line {
+      fill: none;
+      stroke: darkblue;
+      stroke-width: 1.5px;
+    }
+
+    .baseline {
+      fill: #F2F2F2;
+    }
+
+    .title {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 1em;
+    }
+
+    .howto {
+        font-size: 12px;
+        font-weight: bold;
+        padding-left:1em;
+
+    }
+    .lasthowto{
+        margin-bottom:1em;
+    }
+
+    </style>
+
+     <div class="title"> God Performance Profiles HowTo:</div><ul>
+     <li><div class="howto">Once you select a god in the table he will turn blue. The lines in the chart then show the gods performance</div>
+     </li><li><div class="howto">If you click a god twice, he will turn red. The god will then be used as comparison baseline (Default: All Gods)</div>
+     </li><li><div class="howto lasthowto">Add and remove performance values (Kills, Deaths, etc.) by clicking on the small black circles left of the name</div>
+     </li></ul>
+    <table id="gods">
+
+    </table>
+
+
+</select>
+    <script src="jquery-1.11.0.min.js"></script>
+
+    <script src="d3.v3.min.js"></script>
+
+        <script>
+
+
+        var selectedGodId = "G275";
+        var selectedGod = "All Gods";
+        var colors = d3.scale.category10();
+        var line;
+var y;
+        var x;
+var yAxis;
+        var area;
+
+        (function() {
+
+            var groups = [];
+            var measures = [];
+            var times = [];
+            var measuresMinMax = [];
+            var measureData = []
+            var measureLines = [];
+            var measuresToggle = [];
+            var godIds = new Object();
+            var groupSize = 0;
+            var numberOfGroups = 0;
+            var numberOfMeasures = 0;
+
+            var records = [];
+            var baseline = [];
+
+            var svg;
+            var legend;
+
+var margin = {top: 20, right: 20, bottom: 30, left: 20},
+                        width = 700 - margin.left - margin.right,
+                        height = 400 - margin.top - margin.bottom;
+
+
+            $(document).ready(function() {
+
+
+                d3.tsv("profiledata.tsv", function(error, data) {
+
+
+                   var i = 0;
+                   while (data[i+1].Time != data[0].Time) {
+                       times.push(data[i].Time);
+                       i+=1;
+                   }
+                   times.push(data[i].Time);
+
+                    for (var i in data[0]){
+                        measures.push(i);
+                    }
+                    measures = measures.slice(2);
+
+                    //intialize matrix with minmax values for every measure, for every timeslot
+                    measuresMinMax = new Array(measures.length);
+                     for (var i = 0; i < measuresMinMax.length; i++)
+                        measuresMinMax[i] = new Array(times.length);
+
+                    for (var i = 0; i < measures.length; i++)
+                    {
+                        measuresToggle[i] = false;
+
+                        for (var j = 0; j < times.length; j++) {
+                            measuresMinMax[i][j]= {min:+data[j][measures[i]], max:+data[j][measures[i]]};
+                        }
+
+                    }
+
+                    measuresToggle[0] = true;
+
+
+
+
+                    var member = '';
+                    for (var i = 0; i < data.length; i++) {
+
+
+                        var timeIndex = 0;
+                        for (var j = 0; j < measures.length; j++)
+                        {
+
+                            t = times.indexOf(data[i].Time);
+                            if ( measuresMinMax[j][t].max < +data[i][measures[j]] ) measuresMinMax[j][t].max = +data[i][measures[j]];
+                            if ( measuresMinMax[j][t].min > +data[i][measures[j]] ) measuresMinMax[j][t].min = +data[i][measures[j]];
+                        }
+
+                        if (data[i].God != member) {
+                            member = data[i].God;
+                            groups.push(data[i].God);
+                        }
+                    }
+
+
+
+                    groupSize = data.length / groups.length
+                    records = data;
+
+                    createGroupSelector();
+
+
+
+                    svg = d3.select("body").append("svg")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom);
+
+                    var legend = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+                          .attr("class", "legend");
+
+                    var chart = svg.append("g").attr("transform", "translate(" + (margin.left  + 130)+ "," + margin.top + ")")
+                          .attr("class", "chart");
+
+                    createLegend(legend);
+
+
+                    createChart(chart);
+
+                    onChangeGroup();
+
+
+                });
+
+              });
+
+
+
+            function createGroupSelector() {
+
+
+                    for (var i =0; i <= (groups.length / 12) ; i++)
+                    {
+                        var row = $('<tr></tr>');
+
+                        for (var j  =0; j < 12 && ((j+1) + (12 * (i)) <= groups.length); j++)
+                             {
+
+                                 var cell = $('<td>'+records[((i*12)+j)*groupSize].God+'</td>');
+                                 cell.attr('id', 'G'+((i*12)+j)*5);
+                                 godIds[records[((i*12)+j)*groupSize].God] = 'G'+((i*12)+j)*5;
+                                 cell.bind({
+                                          click: function() {
+                                            //console.log(selectedGodId + ' == ' + $(this).attr('id'));
+                                            if (selectedGodId ==  $(this).attr('id'))
+                                            {
+                                                $('.selectedBaseline').removeClass('selectedBaseline');
+                                                $( this ).addClass('selectedBaseline');
+                                                selectedGodId = $(this).attr('id');
+                                                selectedGod = $( this ).text();
+                                                baseline = records.filter(function(d){
+                                                            console.log(d.God + ' == ' + selectedGod);
+                                                    return d.God ==  selectedGod;}
+                                                );
+
+                                                rebase();
+
+                                                 svg.select('#baselineText').transition()
+                                                                  .duration(2000)
+                                             .attr("transform", "translate("+(width-110)+","+(y(1))+")")
+                                                .text(selectedGod);
+
+                                            }
+                                            else {
+                                                $('#'+selectedGodId).removeClass('selected');
+                                                $( this ).addClass('selected');
+                                                selectedGodId = $(this).attr('id');
+                                                selectedGod = $( this ).text();
+                                                onChangeMeasure($( this ).text());
+                                            }
+                                            }
+
+
+                                        });
+                                 row.append(cell)
+                             }
+
+                        $('#gods').append(row);
+                        $('#'+selectedGodId).addClass('selected');
+                        $('#'+godIds[selectedGod]).addClass('selectedBaseline');
+
+                    }
+
+                console.log(godIds);
+
+            }
+
+
+
+            function createLegend(legend) {
+
+                colors.range(colors.range().slice(0,measures.length));
+                //
+
+                //
+                var g = legend.selectAll('rect').data(measures).enter()
+                            .append("g")
+                                .attr("class", function(d) {return 'm'+d;})
+                                .attr("transform", function(d,i) {return "translate (0," + i*20 + ")"});
+
+
+
+
+
+                g.append("rect")
+                            .attr('x',function(d,i){ return 70;})
+                            .attr('y',3)
+                            .attr('width',11)
+                            .attr('height',11)
+                            .style("fill", function (d,i) { return colors.range()[i]; });
+                g.append("text")
+
+                            .attr("y", 6)
+                            .attr("dy", ".71em")
+                            .style("text-anchor", "start")
+                            .text(function (d,i){return d;});
+
+                   g.append("circle") .attr('id', function(d){return 'toggle'+d;})
+                            .attr('cx',function(d,i){return -8})
+                            .attr('cy',9)
+                            .attr('r',5)
+                            .style('stroke', 'black')
+                            .style('stroke-width', 1)
+                            .style("fill", function (d,i) { if(i==0) return "black";
+                                                                 return "white";})
+                            .on("click", function(d,i){
+                               if (measuresToggle[i]) {
+                                   d3.select(this).style("fill", "white");
+                                   d3.select("#line"+measures[i]).style("display",'none');
+                                   measuresToggle[i] = false;
+                                   setMinMax(selectedGod);
+                               }
+                               else {
+                                   d3.select(this).style("fill", "black");
+                                   d3.select("#line"+measures[i]).style("display",null);
+                                   measuresToggle[i] = true;
+                                   setMinMax(selectedGod);
+                               }
+
+                           });
+
+
+            }
+
+            function createChart(chart) {
+
+
+
+            x = d3.scale.linear()
+                .range([10, width]);
+
+            y = d3.scale.linear()
+                .range([height, 0]);
+                   // .base(Math.E);
+              // y.ticks(6, function(d,i) {return 5;});
+
+
+            var xAxis = d3.svg.axis()
+                .scale(x)
+                .orient("bottom");
+
+
+             yAxis = d3.svg.axis()
+                .scale(y)
+
+                .orient("left")
+                    .tickFormat(function(d) {
+                        if(d==1) return '+/- 0';
+                        if(d>1) return '+' +Math.round((d-1)*100)+'%';
+                        if(d<1) return '-'+ Math.round((1-d) *100) + '%';
+                        })
+                    ;
+
+             area = d3.svg.area()
+                    .interpolate("basis")
+                .x(function(d) { return x(+d.Time+5); })
+                .y0(height)
+                .y1(function(d) { return y(1); });
+
+
+            line =  d3.svg.line()
+                    .interpolate("basis")
+                        .x(function(d) { return x(+d.Time+5); })
+                        .y(function(d) {return y(+d.Measure/+d.Baseline);} )
+            ;
+
+            var svg = chart;
+
+             var killPath;
+
+             (function(){
+
+                baseline = records.filter(function(d){return d.God == selectedGod});
+                x.domain(d3.extent(baseline, function(d) { return +d.Time+5; }));
+                setMinMax(selectedGod);
+                 onChangeMeasure(selectedGod);
+
+                  svg.append("g")
+                      .attr("class", "x axis")
+                      .attr("transform", "translate(0," + height + ")")
+                      .call(xAxis)
+                    .append("text")
+                      .attr("transform", "translate("+(width-5)+", 15)")
+                      .attr("y", 6)
+                      .attr("dy", ".71em")
+                      .style("text-anchor", "end")
+                      .text("Time played")
+
+                  var g = svg.append("g")
+                      .attr("class", "y axis")
+                      .call(yAxis);
+                    g.append("text")
+                      .attr("transform", "rotate(-90)")
+                      .attr("y", 6)
+                      .attr("dy", ".71em")
+                      .style("text-anchor", "end")
+                      .text("Performance Percentage")
+
+
+                     g.append("text")
+                             .attr('id', 'baselineText')
+                      .attr("transform", "translate("+(width-110)+","+(y(1))+")")
+                      .attr("y", 6)
+                      .attr("dy", ".71em")
+                      .style("text-anchor", "end")
+                      .text(selectedGod)
+                })();
+
+        }
+
+            function onChangeMeasure(group) {
+
+
+
+                 groupData = records.filter(function(d){return d.God == group;});
+
+                 measureData = new Array(groupData.length);
+
+
+
+                if (svg.select('.baseline')[0][0] == null) {
+                         svg.select('.chart').append("path")
+                                  .data([baseline])
+                                  .attr("class", "baseline")
+                                  .attr("d", area);
+                     }
+                    else { svg.select('.baseline').data([baseline]).transition()
+                                          .duration(2000)
+                                        .attr("d", area);}
+
+
+
+                 for (var  i = 0; i < measures.length; i++) {
+
+                      for(var j = 0;j < groupData.length; j++){
+                          measureData[j] = new Object();
+                          measureData[j].God = groupData[j].God;
+                          measureData[j].Time = groupData[j].Time;
+                          measureData[j].Measure = +groupData[j][measures[i]];
+                          measureData[j].Baseline = +baseline[j][measures[i]];
+                      }
+
+
+                     if (measureLines.length < measures.length) {
+                         console.log("SADDGSDG");
+                         measureLines[i] = svg.select('.chart').append("path")
+                      .data([measureData])
+                      .attr("class", "line")
+                          .attr("id", "line"+measures[i])
+                      .attr("d",line)
+                      .style("stroke", colors.range()[i]);
+
+                        if (measuresToggle[i] == false) {
+
+                                   measureLines[i].style("display",'none');
+
+
+                               }
+
+                     }
+                     else {
+
+                      measureLines[i].data(measureData)
+                                         .transition()
+                                          .duration(2000)
+                                           .attr("d", line(measureData));
+                     }
+
+
+                 }
+
+
+             }
+
+
+            function onChangeGroup() {}
+            function rebase() {
+
+                setMinMax(selectedGod);
+
+
+
+            }
+
+            function setMinMax(group) {
+
+                var yMin = 1;
+                var yMax = 1;
+
+
+                /* Calculate the minimum and maximum values for all groups in respect to all measures */
+                for (var i = 0; i < measures.length; i++)
+                {
+                    for (var j = 0; j < times.length; j++)
+                    {
+                        if (measuresToggle[i] && measuresMinMax[i][j].min / baseline[j][measures[i]] < yMin) {
+                            yMin = measuresMinMax[i][j].min / baseline[j][measures[i]];
+
+                        }
+
+                        if (measuresToggle[i] && measuresMinMax[i][j].max / baseline[j][measures[i]] > yMax) {
+                            yMax = measuresMinMax[i][j].max / baseline[j][measures[i]];
+
+                        }
+                    }
+                }
+
+
+
+
+
+                y.domain([yMin, yMax]);
+                yAxis.scale(y);
+
+
+
+                 svg.select(".y")
+                    .transition().duration(1500).ease("sin-in-out")  // https://github.com/mbostock/d3/wiki/Transitions#wiki-d3_ease
+                    .call(yAxis);
+
+                 onChangeMeasure(group);
+
+
+            }
+
+        })();
+
+
+
+
+
+        </script>
+
+</body>
+</html>
