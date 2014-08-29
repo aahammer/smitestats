@@ -1,4 +1,4 @@
 smitestats
 ==========
 
-Extraction and analysis of Smite statistics
+Crawling some data from the game Smite and display results in a data driven document
