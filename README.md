@@ -5,7 +5,3 @@ Crawled some data from the game [Smite](https://account.hirezstudios.com/smitega
 
 
 ### > Go to the [Smite God Profiler](https://aahammer.github.io/smitestats.app/)
-
-Screenshot
-==========
-![smitestats](https://media.giphy.com/media/583Q0BUBtxCSYYR5NT/giphy.gif)
